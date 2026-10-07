@@ -43,6 +43,7 @@ export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
   const token = store.get(COOKIE)?.value;
   if (!token) return null;
+  if (!process.env.AUTH_SECRET) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
     if (!payload.id || !payload.email || !payload.role) return null;

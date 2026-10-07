@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { verifySessionToken } from "@/lib/auth/verify-session-token";
 
 const PUBLIC_PATHS = new Set(["/login"]);
 
@@ -13,15 +13,19 @@ function isPublicAsset(pathname: string) {
   );
 }
 
-async function isAuthenticated(request: NextRequest): Promise<boolean> {
-  const token = request.cookies.get("pms_session")?.value;
-  const secret = process.env.AUTH_SECRET;
-  if (!token || !secret) return false;
+function safeNext() {
+  return NextResponse.next();
+}
+
+function safeLoginRedirect(request: NextRequest, pathname: string) {
   try {
-    await jwtVerify(token, new TextEncoder().encode(secret));
-    return true;
+    const url = new URL("/login", request.url);
+    if (pathname !== "/" && pathname !== "/login") {
+      url.searchParams.set("from", pathname);
+    }
+    return NextResponse.redirect(url);
   } catch {
-    return false;
+    return safeNext();
   }
 }
 
@@ -29,37 +33,36 @@ export async function proxy(request: NextRequest) {
   try {
     const { pathname } = request.nextUrl;
     if (isPublicAsset(pathname)) {
-      return NextResponse.next();
+      return safeNext();
     }
 
-    const authenticated = await isAuthenticated(request);
+    const authenticated = await verifySessionToken(
+      request.cookies.get("pms_session")?.value,
+      process.env.AUTH_SECRET,
+    );
 
     if (PUBLIC_PATHS.has(pathname)) {
       if (authenticated) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
-      return NextResponse.next();
+      return safeNext();
     }
 
     if (!authenticated) {
-      const url = new URL("/login", request.url);
-      if (pathname !== "/") {
-        url.searchParams.set("from", pathname);
-      }
-      return NextResponse.redirect(url);
+      return safeLoginRedirect(request, pathname);
     }
 
     if (pathname === "/") {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
-    return NextResponse.next();
+    return safeNext();
   } catch {
-    const login = new URL("/login", request.url);
-    if (request.nextUrl.pathname === "/login") {
-      return NextResponse.next();
+    const pathname = request.nextUrl?.pathname ?? "";
+    if (pathname === "/login") {
+      return safeNext();
     }
-    return NextResponse.redirect(login);
+    return safeLoginRedirect(request, pathname);
   }
 }
 

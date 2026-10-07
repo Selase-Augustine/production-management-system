@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  PRODUCTION_MANAGER
+  ADMIN
+}
+
+enum ShiftStatus {
+  PENDING
+  PRODUCED
+  NO_PRODUCTION
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(PRODUCTION_MANAGER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  productionDays   ProductionDay[]
+  productionShifts ProductionShift[]
+  productionRecords ProductionRecord[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Product {
+  id        String   @id @default(cuid())
+  itemCode  String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productionRecords ProductionRecord[]
+
+  @@index([name])
+  @@map("products")
+}
+
+model Shift {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sequence  Int      @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productionShifts ProductionShift[]
+
+  @@map("shifts")
+}
+
+model NoProductionReason {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productionShifts ProductionShift[]
+
+  @@map("no_production_reasons")
+}
+
+model ProductionDay {
+  id             String   @id @default(cuid())
+  productionDate DateTime @unique @db.Date
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  createdBy User              @relation(fields: [createdById], references: [id])
+  shifts    ProductionShift[]
+
+  @@index([productionDate])
+  @@index([createdById])
+  @@map("production_days")
+}
+
+model ProductionShift {
+  id                   String      @id @default(cuid())
+  productionDayId      String
+  shiftId              String
+  status               ShiftStatus @default(PENDING)
+  noProductionReasonId String?
+  remarks              String?
+  createdById          String
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  productionDay      ProductionDay       @relation(fields: [productionDayId], references: [id], onDelete: Cascade)
+  shift              Shift               @relation(fields: [shiftId], references: [id])
+  noProductionReason NoProductionReason? @relation(fields: [noProductionReasonId], references: [id])
+  createdBy          User                @relation(fields: [createdById], references: [id])
+  records            ProductionRecord[]
+
+  @@unique([productionDayId, shiftId])
+  @@index([shiftId])
+  @@index([status])
+  @@index([createdById])
+  @@index([productionDayId])
+  @@map("production_shifts")
+}
+
+model ProductionRecord {
+  id                String   @id @default(cuid())
+  productionShiftId String
+  productId         String
+  quantityTonnes    Decimal  @db.Decimal(12, 3)
+  remarks           String?
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  productionShift ProductionShift @relation(fields: [productionShiftId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id])
+  createdBy       User            @relation(fields: [createdById], references: [id])
+
+  @@unique([productionShiftId, productId])
+  @@index([productId])
+  @@index([createdById])
+  @@index([productionShiftId])
+  @@map("production_records")
+}

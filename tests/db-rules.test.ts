@@ -4,6 +4,10 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 const suffix = `t${Date.now()}`;
+function uniqueDate(offsetDays: number) {
+  const d = new Date(Date.UTC(2098, 0, 1 + (Number(suffix.slice(1)) % 10000) + offsetDays));
+  return d;
+}
 
 describe("database business rules", () => {
   let userId = "";
@@ -49,9 +53,11 @@ describe("database business rules", () => {
   });
 
   it("a production day can contain three shifts and a shift cannot be duplicated", async () => {
-    const date = new Date("2099-01-02T00:00:00.000Z");
-    const day = await prisma.productionDay.create({
-      data: { productionDate: date, createdById: userId },
+    const date = uniqueDate(1);
+    const day = await prisma.productionDay.upsert({
+      where: { productionDate: date },
+      update: {},
+      create: { productionDate: date, createdById: userId },
     });
     await prisma.productionShift.createMany({
       data: [
@@ -80,9 +86,11 @@ describe("database business rules", () => {
   });
 
   it("same product cannot be duplicated within a shift; decimals work; edit and delete work", async () => {
-    const date = new Date("2099-01-03T00:00:00.000Z");
-    const day = await prisma.productionDay.create({
-      data: { productionDate: date, createdById: userId },
+    const date = uniqueDate(2);
+    const day = await prisma.productionDay.upsert({
+      where: { productionDate: date },
+      update: {},
+      create: { productionDate: date, createdById: userId },
     });
     const shift = await prisma.productionShift.create({
       data: { productionDayId: day.id, shiftId: morning, createdById: userId, status: "PRODUCED" },
@@ -125,9 +133,11 @@ describe("database business rules", () => {
   });
 
   it("historical production can be entered and no-production stores a reason", async () => {
-    const date = new Date("2020-06-15T00:00:00.000Z");
-    const day = await prisma.productionDay.create({
-      data: { productionDate: date, createdById: userId },
+    const date = uniqueDate(3);
+    const day = await prisma.productionDay.upsert({
+      where: { productionDate: date },
+      update: {},
+      create: { productionDate: date, createdById: userId },
     });
     const shift = await prisma.productionShift.create({
       data: {
@@ -143,9 +153,11 @@ describe("database business rules", () => {
   });
 
   it("completed production days are detected correctly", async () => {
-    const date = new Date("2099-01-04T00:00:00.000Z");
-    const day = await prisma.productionDay.create({
-      data: { productionDate: date, createdById: userId },
+    const date = uniqueDate(4);
+    const day = await prisma.productionDay.upsert({
+      where: { productionDate: date },
+      update: {},
+      create: { productionDate: date, createdById: userId },
     });
     await prisma.productionShift.createMany({
       data: [

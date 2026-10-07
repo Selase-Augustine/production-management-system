@@ -107,7 +107,9 @@ export async function importWorkbook(buffer: Buffer, userId: string): Promise<Im
     if (!rows?.length) continue;
 
     const headerRow = (rows[1] ?? rows.find((r) => Array.isArray(r))) as unknown[] | undefined;
-    const headers = (headerRow ?? []).map((h) => cellText(h).toLowerCase());
+    const headers = Array.from({ length: headerRow?.length ?? 0 }, (_, i) =>
+      cellText(headerRow?.[i]).toLowerCase(),
+    );
     const looksTabular =
       headers.some((h) => h.includes("date")) &&
       headers.some((h) => h.includes("shift") || h.includes("product"));

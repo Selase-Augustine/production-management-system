@@ -114,7 +114,11 @@ export async function generateReport(filters: ReportFilters) {
     dailyTotals.set(dayKey, (dailyTotals.get(dayKey) ?? 0) + qty);
   }
 
-  const rows = [...byProduct.values()].filter((r) => r.total > 0 || filters.kind !== "custom");
+  const rows = [...byProduct.values()].filter((r) =>
+    filters.kind === "monthly" || filters.kind === "quarterly" || filters.kind === "yearly"
+      ? true
+      : r.total > 0,
+  );
   const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
   const columnTotals = emptyColumns(columnKeys);
   for (const row of rows) {

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { parseDateOnly } from "@/lib/dates";
 import { listProductionEntries } from "@/lib/production/entries";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProductionPage({
   searchParams,
 }: {

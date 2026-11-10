@@ -2,6 +2,8 @@ import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { getDashboardData } from "@/lib/dashboard/queries";
 import { parseDateOnly, rangeForPreset, type DashboardPreset } from "@/lib/dates";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage({
   searchParams,
 }: {

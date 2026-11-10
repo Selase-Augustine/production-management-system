@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    name: tests and production build
+    runs-on: ubuntu-latest
+    env:
+      # Prisma reads DATABASE_URL when the client is constructed during `next build`.
+      # App routes are force-dynamic, so this placeholder is never queried.
+      DATABASE_URL: postgresql://prisma:prisma@127.0.0.1:5432/prisma?schema=public
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run tests/business-rules.test.ts tests/verify-session-token.test.ts tests/database-url.test.ts
+      - run: pnpm exec prisma generate
+      - run: pnpm exec next build

@@ -1,10 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge, statusBadge } from "@/components/ui/badge";
 import { formatTonnes } from "@/lib/utils";
 import { Select } from "@/components/ui/input";
+import { formatDisplayDate } from "@/lib/dates";
+import type { ProductionListRow } from "@/lib/production/entry-rows";
 import {
   Bar,
   BarChart,
@@ -38,6 +41,7 @@ export function DashboardView({
     pendingShifts: number;
     trend: Array<[string, number]>;
     rangeTotal: number;
+    recentEntries: ProductionListRow[];
   };
 }) {
   const router = useRouter();
@@ -162,6 +166,50 @@ export function DashboardView({
           </ResponsiveContainer>
         </Card>
       </div>
+
+      <Card>
+        <CardTitle>Saved entries this period</CardTitle>
+        {data.recentEntries.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No saved production or no-production entries for this period.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-slate-600">
+                <tr>
+                  <th className="py-1 pr-3">Date</th>
+                  <th className="py-1 pr-3">Shift</th>
+                  <th className="py-1 pr-3">Entry</th>
+                  <th className="py-1 pr-3">Status</th>
+                  <th className="py-1 text-right">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentEntries.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100">
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <Link className="text-[#1e3a5f] underline" href={`/production/${row.shiftRecordId}`}>
+                        {formatDisplayDate(new Date(row.date))}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-3">{row.shift}</td>
+                    <td className="py-2 pr-3">
+                      {row.status === "NO_PRODUCTION"
+                        ? `No production${row.reason ? ` (${row.reason})` : ""}`
+                        : `${row.product} (${row.itemCode})`}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge status={statusBadge(row.status)}>{row.status.replaceAll("_", " ")}</Badge>
+                    </td>
+                    <td className="py-2 text-right">
+                      {row.status === "NO_PRODUCTION" ? "—" : `${formatTonnes(row.quantity)} t`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       <Card className="h-80">
         <CardTitle>Shift comparison</CardTitle>

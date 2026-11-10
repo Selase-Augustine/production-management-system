@@ -89,6 +89,16 @@ export async function saveShiftProductionAction(input: unknown) {
   return { ok: true, productionDayId: day.id, existed: Boolean(existing) };
 }
 
+export async function deleteShiftAction(id: string) {
+  await requireSession();
+  const shift = await prisma.productionShift.findUnique({ where: { id } });
+  if (!shift) return { error: "Shift record not found." };
+  await prisma.productionShift.delete({ where: { id } });
+  revalidatePath("/production");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function deleteRecordAction(id: string) {
   await requireSession();
   const record = await prisma.productionRecord.findUnique({

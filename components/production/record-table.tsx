@@ -2,24 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { deleteRecordAction } from "@/lib/actions/production";
+import { deleteRecordAction, deleteShiftAction } from "@/lib/actions/production";
 import { Badge, statusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTonnes } from "@/lib/utils";
 import { formatDisplayDate } from "@/lib/dates";
+import type { ProductionListRow } from "@/lib/production/entry-rows";
 
-export type RecordRow = {
-  id: string;
-  date: string;
-  shift: string;
-  product: string;
-  itemCode: string;
-  quantity: number;
-  status: string;
-  enteredBy: string;
-  updatedAt: string;
-  shiftRecordId: string;
-};
+export type RecordRow = ProductionListRow;
 
 export function RecordTable({ rows }: { rows: RecordRow[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -28,7 +18,11 @@ export function RecordTable({ rows }: { rows: RecordRow[] }) {
   async function onDelete() {
     if (!confirm) return;
     setPendingId(confirm.id);
-    await deleteRecordAction(confirm.id);
+    if (confirm.recordId) {
+      await deleteRecordAction(confirm.recordId);
+    } else {
+      await deleteShiftAction(confirm.shiftRecordId);
+    }
     setPendingId(null);
     setConfirm(null);
     window.location.reload();
@@ -48,7 +42,7 @@ export function RecordTable({ rows }: { rows: RecordRow[] }) {
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
-              {["Date", "Shift", "Product", "Quantity", "Status", "Entered By", "Last Updated", "Actions"].map((h) => (
+              {["Date", "Shift", "Product / reason", "Quantity", "Status", "Entered By", "Last Updated", "Actions"].map((h) => (
                 <th key={h} className="whitespace-nowrap px-3 py-2 font-semibold">
                   {h}
                 </th>
@@ -61,9 +55,18 @@ export function RecordTable({ rows }: { rows: RecordRow[] }) {
                 <td className="whitespace-nowrap px-3 py-2">{formatDisplayDate(new Date(row.date))}</td>
                 <td className="px-3 py-2">{row.shift}</td>
                 <td className="px-3 py-2">
-                  {row.product} <span className="text-slate-500">({row.itemCode})</span>
+                  {row.status === "NO_PRODUCTION" ? (
+                    <>
+                      No production
+                      {row.reason ? <span className="text-slate-500"> ({row.reason})</span> : null}
+                    </>
+                  ) : (
+                    <>
+                      {row.product} <span className="text-slate-500">({row.itemCode})</span>
+                    </>
+                  )}
                 </td>
-                <td className="px-3 py-2 text-right">{formatTonnes(row.quantity)}</td>
+                <td className="px-3 py-2 text-right">{row.status === "NO_PRODUCTION" ? "—" : formatTonnes(row.quantity)}</td>
                 <td className="px-3 py-2">
                   <Badge status={statusBadge(row.status)}>{row.status.replaceAll("_", " ")}</Badge>
                 </td>
@@ -90,12 +93,18 @@ export function RecordTable({ rows }: { rows: RecordRow[] }) {
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-            <h3 className="text-lg font-semibold">Delete this production record?</h3>
+            <h3 className="text-lg font-semibold">
+              {confirm.status === "NO_PRODUCTION" ? "Delete this no-production entry?" : "Delete this production record?"}
+            </h3>
             <p className="mt-3 text-sm text-slate-600">
-              Product: {confirm.product}
+              {confirm.status === "NO_PRODUCTION" ? "Reason" : "Product"}: {confirm.product}
               <br />
-              Quantity: {formatTonnes(confirm.quantity)} tonnes
-              <br />
+              {confirm.status === "NO_PRODUCTION" ? null : (
+                <>
+                  Quantity: {formatTonnes(confirm.quantity)} tonnes
+                  <br />
+                </>
+              )}
               Date: {formatDisplayDate(new Date(confirm.date))}
               <br />
               Shift: {confirm.shift}

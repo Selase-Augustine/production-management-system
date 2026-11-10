@@ -2,8 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { RecordTable } from "@/components/production/record-table";
 import { Button } from "@/components/ui/button";
-import { toNumber } from "@/lib/utils";
 import { parseDateOnly } from "@/lib/dates";
+import { listProductionEntries } from "@/lib/production/entries";
 
 export default async function ProductionPage({
   searchParams,
@@ -19,54 +19,15 @@ export default async function ProductionPage({
 
   const from = get("from") ? parseDateOnly(get("from")) : undefined;
   const to = get("to") ? parseDateOnly(get("to")) : undefined;
-  const q = get("q").toLowerCase();
 
-  const records = await prisma.productionRecord.findMany({
-    where: {
-      productionShift: {
-        ...(get("shift") ? { shiftId: get("shift") } : {}),
-        ...(get("status") ? { status: get("status") as "PRODUCED" } : {}),
-        ...(from || to
-          ? {
-              productionDay: {
-                productionDate: {
-                  ...(from ? { gte: from } : {}),
-                  ...(to ? { lte: to } : {}),
-                },
-              },
-            }
-          : {}),
-      },
-      ...(get("product") ? { productId: get("product") } : {}),
-    },
-    include: {
-      product: true,
-      createdBy: true,
-      productionShift: { include: { shift: true, productionDay: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
+  const rows = await listProductionEntries({
+    from,
+    to,
+    shiftId: get("shift") || undefined,
+    productId: get("product") || undefined,
+    status: get("status") || undefined,
+    q: get("q") || undefined,
   });
-
-  const rows = records
-    .filter(
-      (r) =>
-        !q ||
-        r.product.name.toLowerCase().includes(q) ||
-        r.product.itemCode.toLowerCase().includes(q),
-    )
-    .map((r) => ({
-      id: r.id,
-      date: r.productionShift.productionDay.productionDate.toISOString(),
-      shift: r.productionShift.shift.name,
-      product: r.product.name,
-      itemCode: r.product.itemCode,
-      quantity: toNumber(r.quantityTonnes),
-      status: r.productionShift.status,
-      enteredBy: r.createdBy.name,
-      updatedAt: r.updatedAt.toISOString(),
-      shiftRecordId: r.productionShiftId,
-    }));
 
   return (
     <div className="space-y-4">
@@ -102,9 +63,8 @@ export default async function ProductionPage({
           <option value="">All statuses</option>
           <option value="PRODUCED">Produced</option>
           <option value="NO_PRODUCTION">No production</option>
-          <option value="PENDING">Pending</option>
         </select>
-        <input className="h-10 rounded-md border px-3" name="q" placeholder="Search product / code" defaultValue={get("q")} />
+        <input className="h-10 rounded-md border px-3" name="q" placeholder="Search product / reason" defaultValue={get("q")} />
         <button className="h-10 rounded-md bg-[#1e3a5f] px-4 text-white md:col-span-6">Filter</button>
       </form>
       <RecordTable rows={rows} />

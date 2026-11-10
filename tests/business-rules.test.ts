@@ -3,6 +3,7 @@ import { saveProductionSchema } from "@/lib/validation/production";
 import { productSchema } from "@/lib/validation/product";
 import { dayStatusFromShifts } from "@/lib/production/status";
 import { assertNoDuplicateProducts, sumQuantities } from "@/lib/production/totals";
+import { describeProductionSave, rowsFromProductionShifts } from "@/lib/production/entry-rows";
 
 describe("business rules (pure)", () => {
   it("a production day is complete only when all three shifts are recorded", () => {
@@ -88,6 +89,66 @@ describe("business rules (pure)", () => {
     expect(monthly).toBe(45);
     expect(quarterly).toBe(60.5);
     expect(yearly).toBe(60.5);
+  });
+
+  it("no-production shifts appear as saved entries even without product lines", () => {
+    const rows = rowsFromProductionShifts([
+      {
+        id: "shift-1",
+        status: "NO_PRODUCTION",
+        remarks: null,
+        updatedAt: new Date("2026-11-10T12:00:00Z"),
+        createdBy: { name: "Production Manager" },
+        shift: { name: "Morning" },
+        productionDay: { productionDate: new Date("2026-11-10T00:00:00Z") },
+        noProductionReason: { name: "Power Outage" },
+        records: [],
+      },
+      {
+        id: "shift-2",
+        status: "PRODUCED",
+        remarks: null,
+        updatedAt: new Date("2026-11-10T12:00:00Z"),
+        createdBy: { name: "Production Manager" },
+        shift: { name: "Afternoon" },
+        productionDay: { productionDate: new Date("2026-11-10T00:00:00Z") },
+        noProductionReason: null,
+        records: [
+          {
+            id: "rec-1",
+            quantityTonnes: 12.5,
+            updatedAt: new Date("2026-11-10T12:00:00Z"),
+            product: { name: "Cowbell Coffee", itemCode: "CBCF" },
+            createdBy: { name: "Production Manager" },
+          },
+        ],
+      },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].status).toBe("NO_PRODUCTION");
+    expect(rows[0].reason).toBe("Power Outage");
+    expect(rows[0].recordId).toBeNull();
+    expect(rows[1].quantity).toBe(12.5);
+  });
+
+  it("save confirmation copy covers both production and no production", () => {
+    expect(
+      describeProductionSave({
+        date: "2026-11-10",
+        shiftName: "Morning",
+        mode: "NO_PRODUCTION",
+        reasonName: "Power Outage",
+        lines: [],
+      }).title,
+    ).toMatch(/no production/i);
+    expect(
+      describeProductionSave({
+        date: "2026-11-10",
+        shiftName: "Morning",
+        mode: "PRODUCED",
+        lines: [{ productName: "Cowbell Coffee", quantityTonnes: 10 }],
+      }).title,
+    ).toMatch(/save production/i);
   });
 
   it("product and shift totals add correctly", () => {

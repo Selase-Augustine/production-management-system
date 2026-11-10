@@ -2,13 +2,17 @@ import { prisma } from "@/lib/db/prisma";
 import { toNumber } from "@/lib/utils";
 import { formatDateISO, toDateOnly } from "@/lib/dates";
 import { dayStatusFromShifts } from "@/lib/production/status";
+import { listProductionEntries } from "@/lib/production/entries";
+import type { ProductionListRow } from "@/lib/production/entry-rows";
 import { startOfMonth, startOfQuarter, startOfYear, endOfDay } from "date-fns";
 
 export async function getDashboardData(start: Date, end: Date, now = new Date()) {
   const today = toDateOnly(now);
+  const rangeStart = toDateOnly(start);
+  const rangeEnd = toDateOnly(end);
   const shifts = await prisma.shift.findMany({ where: { isActive: true }, orderBy: { sequence: "asc" } });
 
-  const [todayDay, rangeRecords, rangeShifts, products, pendingInRange, noProdInRange] =
+  const [todayDay, rangeRecords, rangeShifts, products, pendingInRange, noProdInRange, recentEntries] =
     await Promise.all([
       prisma.productionDay.findUnique({
         where: { productionDate: today },
@@ -22,7 +26,7 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
         where: {
           productionShift: {
             status: "PRODUCED",
-            productionDay: { productionDate: { gte: start, lte: end } },
+            productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } },
           },
         },
         include: {
@@ -31,22 +35,23 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
         },
       }),
       prisma.productionShift.findMany({
-        where: { productionDay: { productionDate: { gte: start, lte: end } } },
+        where: { productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } } },
         include: { shift: true, productionDay: true, records: true },
       }),
       prisma.product.findMany({ orderBy: { name: "asc" } }),
       prisma.productionShift.count({
         where: {
           status: "PENDING",
-          productionDay: { productionDate: { gte: start, lte: end } },
+          productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } },
         },
       }),
       prisma.productionShift.count({
         where: {
           status: "NO_PRODUCTION",
-          productionDay: { productionDate: { gte: start, lte: end } },
+          productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } },
         },
       }),
+      listProductionEntries({ from: rangeStart, to: rangeEnd, take: 50 }),
     ]);
 
   const todayShiftCards = shifts.map((shift) => {
@@ -99,6 +104,10 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
   }));
 
   const dailyMap = new Map<string, number>();
+  for (const shift of rangeShifts) {
+    const key = formatDateISO(shift.productionDay.productionDate);
+    if (!dailyMap.has(key)) dailyMap.set(key, 0);
+  }
   for (const rec of rangeRecords) {
     const key = formatDateISO(rec.productionShift.productionDay.productionDate);
     dailyMap.set(key, (dailyMap.get(key) ?? 0) + toNumber(rec.quantityTonnes));
@@ -123,8 +132,11 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
     pendingShifts,
     trend: [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)),
     rangeTotal: rangeRecords.reduce((s, r) => s + toNumber(r.quantityTonnes), 0),
+    recentEntries,
   };
 }
+
+export type { ProductionListRow };
 
 export async function getCalendarDays(start: Date, end: Date) {
   const shifts = await prisma.shift.findMany({ where: { isActive: true }, orderBy: { sequence: "asc" } });

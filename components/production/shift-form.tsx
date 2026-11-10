@@ -6,6 +6,7 @@ import { saveShiftProductionAction } from "@/lib/actions/production";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { formatTonnes } from "@/lib/utils";
+import { describeProductionSave } from "@/lib/production/entry-rows";
 
 type Product = { id: string; name: string; itemCode: string; isActive: boolean };
 type Shift = { id: string; name: string };
@@ -44,11 +45,17 @@ export function ShiftForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const total = useMemo(
     () => lines.reduce((s, l) => s + (Number(l.quantityTonnes) || 0), 0),
     [lines],
   );
+
+  function openConfirm() {
+    setError(null);
+    setConfirmOpen(true);
+  }
 
   async function onSave() {
     setPending(true);
@@ -67,12 +74,26 @@ export function ShiftForm({
     });
     setPending(false);
     if (result.error) {
+      setConfirmOpen(false);
       setError(result.error);
       return;
     }
+    setConfirmOpen(false);
     router.push("/production");
     router.refresh();
   }
+
+  const confirmCopy = describeProductionSave({
+    date,
+    shiftName: shifts.find((s) => s.id === shiftId)?.name ?? "Shift",
+    mode,
+    reasonName: reasons.find((r) => r.id === reasonId)?.name,
+    remarks,
+    lines: lines.map((l) => ({
+      productName: products.find((p) => p.id === l.productId)?.name ?? "Product",
+      quantityTonnes: Number(l.quantityTonnes) || 0,
+    })),
+  });
 
   return (
     <div className="space-y-6">
@@ -202,13 +223,39 @@ export function ShiftForm({
 
       {error && <p className="text-sm text-red-700">{error}</p>}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button type="button" className="w-full sm:w-auto" onClick={onSave} disabled={pending}>
-          {pending ? "Saving production..." : mode === "PRODUCED" ? "Save Production" : "Save No Production"}
+        <Button type="button" className="w-full sm:w-auto" onClick={openConfirm} disabled={pending}>
+          {mode === "PRODUCED" ? "Save Production" : "Save No Production"}
         </Button>
         <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => router.back()} disabled={pending}>
           Cancel
         </Button>
       </div>
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold">{confirmCopy.title}</h3>
+            <p className="mt-3 text-sm text-slate-600">{confirmCopy.summary}</p>
+            {mode === "PRODUCED" ? (
+              <ul className="mt-3 max-h-40 space-y-1 overflow-auto text-sm text-slate-700">
+                {lines.map((line, i) => (
+                  <li key={i}>
+                    {products.find((p) => p.id === line.productId)?.name ?? "Product"}: {formatTonnes(Number(line.quantityTonnes) || 0)} tonnes
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {remarks ? <p className="mt-2 text-sm text-slate-500">Remarks: {remarks}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={pending}>
+                Cancel
+              </Button>
+              <Button onClick={onSave} disabled={pending}>
+                {pending ? "Saving..." : "Confirm and save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

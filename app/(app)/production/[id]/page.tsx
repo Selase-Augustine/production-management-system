@@ -35,7 +35,11 @@ export default async function ProductionShiftPage({ params }: { params: Promise<
       {shift.remarks && <p>Remarks: {shift.remarks}</p>}
       <p className="text-sm text-slate-600">Entered by {shift.createdBy.name}</p>
       {shift.records.length === 0 ? (
-        <p>No product quantities for this shift.</p>
+        <p>
+          {shift.status === "NO_PRODUCTION"
+            ? "This shift was saved as no production, so there are no product quantities."
+            : "No product quantities for this shift."}
+        </p>
       ) : (
         <table className="min-w-full rounded-lg border bg-white text-sm">
           <thead className="bg-slate-50">

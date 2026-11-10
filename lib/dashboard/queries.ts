@@ -2,8 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { toNumber } from "@/lib/utils";
 import { formatDateISO, toDateOnly } from "@/lib/dates";
 import { dayStatusFromShifts } from "@/lib/production/status";
-import { listProductionEntries } from "@/lib/production/entries";
-import type { ProductionListRow } from "@/lib/production/entry-rows";
+import { rowsFromProductionShifts, type ProductionListRow } from "@/lib/production/entry-rows";
 import { startOfMonth, startOfQuarter, startOfYear, endOfDay } from "date-fns";
 
 export async function getDashboardData(start: Date, end: Date, now = new Date()) {
@@ -12,7 +11,7 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
   const rangeEnd = toDateOnly(end);
   const shifts = await prisma.shift.findMany({ where: { isActive: true }, orderBy: { sequence: "asc" } });
 
-  const [todayDay, rangeRecords, rangeShifts, products, pendingInRange, noProdInRange, recentEntries] =
+  const [todayDay, rangeRecords, rangeShifts, products, pendingInRange, noProdInRange] =
     await Promise.all([
       prisma.productionDay.findUnique({
         where: { productionDate: today },
@@ -36,7 +35,14 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
       }),
       prisma.productionShift.findMany({
         where: { productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } } },
-        include: { shift: true, productionDay: true, records: true },
+        include: {
+          shift: true,
+          productionDay: true,
+          createdBy: true,
+          noProductionReason: true,
+          records: { include: { product: true, createdBy: true } },
+        },
+        orderBy: { updatedAt: "desc" },
       }),
       prisma.product.findMany({ orderBy: { name: "asc" } }),
       prisma.productionShift.count({
@@ -51,8 +57,8 @@ export async function getDashboardData(start: Date, end: Date, now = new Date())
           productionDay: { productionDate: { gte: rangeStart, lte: rangeEnd } },
         },
       }),
-      listProductionEntries({ from: rangeStart, to: rangeEnd, take: 50 }),
     ]);
+  const recentEntries = rowsFromProductionShifts(rangeShifts.filter((s) => s.status !== "PENDING")).slice(0, 50);
 
   const todayShiftCards = shifts.map((shift) => {
     const found = todayDay?.shifts.find((s) => s.shiftId === shift.id);
